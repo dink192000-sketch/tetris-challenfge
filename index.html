@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>블록 쌓기 챌린지</title>
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#14132b;--panel:#1f1d40;--line:#2e2b5c;--text:#f3f1ff;--muted:#a9a4d6;--accent:#ffd166;--ok:#06d6a0;--warn:#ef476f}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Noto Sans KR',system-ui,sans-serif}
+  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:14px 10px 28px}
+  h1{font-size:22px;font-weight:900;margin:2px 0 10px;letter-spacing:-.5px}
+  h1 span{color:var(--accent)}
+  .game{display:flex;gap:12px;align-items:flex-start}
+  .well{position:relative;border:3px solid var(--line);border-radius:12px;background:#0e0d22;line-height:0}
+  canvas{display:block;border-radius:9px}
+  .side{display:flex;flex-direction:column;gap:8px;width:104px}
+  .box{background:var(--panel);border-radius:10px;padding:8px 10px}
+  .box .k{font-size:11px;color:var(--muted)}
+  .box .v{font-size:20px;font-weight:900}
+  #next{display:block;margin-top:4px}
+  .player{font-size:12px;color:var(--muted);word-break:break-all}
+  .btn{font:inherit;font-weight:700;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;background:var(--accent);color:#1b1a33}
+  .btn.ghost{background:var(--panel);color:var(--text);border:1px solid var(--line)}
+  .btn.small{padding:6px 10px;font-size:13px}
+  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(14,13,34,.88);border-radius:9px;line-height:1.5;padding:14px;text-align:center}
+  .overlay[hidden]{display:none}
+  .card{width:100%}
+  .card h2{margin:0 0 6px;font-size:20px}
+  .card p{margin:4px 0;color:var(--muted);font-size:13px}
+  .big{font-size:34px;font-weight:900;color:var(--accent);margin:4px 0}
+  input[type=text]{font:inherit;width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:#0e0d22;color:var(--text);margin:8px 0;text-align:center}
+  a.btn{display:inline-block;text-decoration:none}
+  .err{color:var(--warn);font-size:12px;min-height:16px}
+  .saved{color:var(--ok);font-weight:700;font-size:14px}
+  .controls{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px;width:100%;max-width:420px}
+  .controls button{font:inherit;font-size:20px;font-weight:900;padding:14px 0;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--text);touch-action:none;user-select:none;-webkit-user-select:none}
+  .controls button:active{background:var(--line)}
+  .help{font-size:12px;color:var(--muted);margin-top:10px;text-align:center}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .note{font-size:12px;color:var(--muted)}
+  @media (min-width:700px){.controls{display:none}}
+</style>
+</head>
+<body>
+<h1>블록 쌓기 <span>챌린지</span></h1>
+
+<div class="game">
+  <div class="well">
+    <canvas id="board"></canvas>
+    <div class="overlay" id="ovStart">
+      <div class="card">
+        <h2>시작하기</h2>
+        <p>이름(또는 학번)을 입력하세요</p>
+        <input type="text" id="nameInput" maxlength="30" placeholder="예: 2026001 홍길동" autocomplete="off">
+        <div class="err" id="nameErr"></div>
+        <button class="btn" id="startBtn">게임 시작</button>
+      </div>
+    </div>
+    <div class="overlay" id="ovPause" hidden>
+      <div class="card"><h2>일시정지</h2><button class="btn" id="resumeBtn">계속하기</button></div>
+    </div>
+    <div class="overlay" id="ovOver" hidden>
+      <div class="card">
+        <h2>게임 종료</h2>
+        <div class="big" id="finalScore">0</div>
+        <p id="finalDetail"></p>
+        <div id="saveArea"></div>
+        <div class="row" style="justify-content:center;margin-top:10px">
+          <button class="btn" id="againBtn">다시 하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="side">
+    <div class="box"><div class="k">점수</div><div class="v" id="score">0</div></div>
+    <div class="box"><div class="k">줄</div><div class="v" id="lines">0</div></div>
+    <div class="box"><div class="k">레벨</div><div class="v" id="level">1</div></div>
+    <div class="box"><div class="k">다음 블록</div><canvas id="next" width="80" height="60"></canvas></div>
+    <div class="box"><div class="k">플레이어</div><div class="player" id="playerName">-</div></div>
+    <button class="btn ghost small" id="pauseBtn">일시정지</button>
+  </div>
+</div>
+
+<div class="controls">
+  <button data-act="left" aria-label="왼쪽">◀</button>
+  <button data-act="rotate" aria-label="회전">⟳</button>
+  <button data-act="down" aria-label="아래">▼</button>
+  <button data-act="right" aria-label="오른쪽">▶</button>
+  <button data-act="drop" aria-label="바로 내리기">⤓</button>
+</div>
+<div class="help">키보드: ← → 이동 · ↑ 회전 · ↓ 천천히 내리기 · Space 바로 내리기 · P 일시정지</div>
+
+
+<script>
+(() => {
+  // ---------- 게임 ----------
+  const COLS = 10, ROWS = 20;
+  const SHAPES = {
+    I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    J: [[1,0,0],[1,1,1],[0,0,0]],
+    L: [[0,0,1],[1,1,1],[0,0,0]],
+    O: [[1,1],[1,1]],
+    S: [[0,1,1],[1,1,0],[0,0,0]],
+    T: [[0,1,0],[1,1,1],[0,0,0]],
+    Z: [[1,1,0],[0,1,1],[0,0,0]]
+  };
+  const COLORS = { I:'#4cc9f0', J:'#7b8cff', L:'#f8961e', O:'#ffd166', S:'#06d6a0', T:'#c77dff', Z:'#ef476f' };
+
+  const cv = document.getElementById('board'), ctx = cv.getContext('2d');
+  const nv = document.getElementById('next'), nctx = nv.getContext('2d');
+  const $ = id => document.getElementById(id);
+
+  let board, cur, nextType, bag = [], score = 0, lines = 0, level = 1, dropMs = 800, acc = 0, lastT = 0;
+  let state = 'idle', startedAt = 0, playerName = '', CELL = 28;
+
+  try { playerName = localStorage.getItem('blk_name') || ''; } catch (e) {}
+  $('nameInput').value = playerName;
+
+  function sizeCanvas() {
+    const availH = window.innerHeight - 230;
+    const availW = Math.min(window.innerWidth - 150, 420);
+    CELL = Math.max(16, Math.min(32, Math.floor(Math.min(availH / ROWS, availW / COLS))));
+    cv.width = COLS * CELL; cv.height = ROWS * CELL;
+    draw();
+  }
+  window.addEventListener('resize', sizeCanvas);
+
+  const newBoard = () => Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  function fromBag() {
+    if (!bag.length) {
+      bag = Object.keys(SHAPES);
+      for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+    }
+    return bag.pop();
+  }
+  function collide(m, x, y) {
+    for (let r = 0; r < m.length; r++) for (let c = 0; c < m[r].length; c++) {
+      if (!m[r][c]) continue;
+      const nx = x + c, ny = y + r;
+      if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+      if (ny >= 0 && board[ny][nx]) return true;
+    }
+    return false;
+  }
+  function rotate(m) {
+    const n = m.length, out = Array.from({ length: n }, () => Array(n).fill(0));
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) out[c][n - 1 - r] = m[r][c];
+    return out;
+  }
+  function spawn() {
+    const t = nextType || fromBag();
+    nextType = fromBag();
+    const m = SHAPES[t].map(r => r.slice());
+    cur = { t, m, x: Math.floor((COLS - m[0].length) / 2), y: t === 'I' ? -1 : 0 };
+    if (collide(cur.m, cur.x, cur.y)) { gameOver(); return; }
+    drawNext();
+  }
+  function tryRotate() {
+    if (cur.t === 'O') return;
+    const m = rotate(cur.m);
+    for (const k of [0, -1, 1, -2, 2]) if (!collide(m, cur.x + k, cur.y)) { cur.m = m; cur.x += k; return; }
+  }
+  function move(dx) { if (!collide(cur.m, cur.x + dx, cur.y)) cur.x += dx; }
+  function softDrop() {
+    if (!collide(cur.m, cur.x, cur.y + 1)) { cur.y++; score += 1; updateHud(); } else lock();
+    acc = 0;
+  }
+  function hardDrop() {
+    let d = 0;
+    while (!collide(cur.m, cur.x, cur.y + 1)) { cur.y++; d++; }
+    score += d * 2; lock();
+  }
+  function lock() {
+    let above = false;
+    cur.m.forEach((row, r) => row.forEach((v, c) => {
+      if (!v) return;
+      const y = cur.y + r;
+      if (y < 0) above = true; else board[y][cur.x + c] = cur.t;
+    }));
+    if (above) { gameOver(); return; }
+    clearLines();
+    spawn();
+  }
+  function clearLines() {
+    let n = 0;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (board[r].every(v => v)) { board.splice(r, 1); board.unshift(Array(COLS).fill(null)); n++; r++; }
+    }
+    if (n) {
+      score += [0, 100, 300, 500, 800][n] * level;
+      lines += n;
+      level = Math.floor(lines / 10) + 1;
+      dropMs = Math.max(90, 800 - (level - 1) * 70);
+    }
+    updateHud();
+  }
+  function updateHud() {
+    $('score').textContent = score.toLocaleString();
+    $('lines').textContent = lines;
+    $('level').textContent = level;
+  }
+
+  function cell(c, x, y, color, ghost) {
+    const s = CELL, p = 1.5;
+    c.beginPath();
+    if (c.roundRect) c.roundRect(x * s + p, y * s + p, s - p * 2, s - p * 2, 4); else c.rect(x * s + p, y * s + p, s - p * 2, s - p * 2);
+    if (ghost) { c.strokeStyle = color; c.globalAlpha = .45; c.lineWidth = 2; c.stroke(); c.globalAlpha = 1; return; }
+    c.fillStyle = color; c.fill();
+    c.fillStyle = 'rgba(255,255,255,.22)';
+    c.fillRect(x * s + p + 3, y * s + p + 3, s - p * 2 - 6, 3);
+  }
+  function draw() {
+    ctx.fillStyle = '#0e0d22'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.strokeStyle = 'rgba(255,255,255,.04)'; ctx.lineWidth = 1;
+    for (let x = 1; x < COLS; x++) { ctx.beginPath(); ctx.moveTo(x * CELL + .5, 0); ctx.lineTo(x * CELL + .5, cv.height); ctx.stroke(); }
+    for (let y = 1; y < ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y * CELL + .5); ctx.lineTo(cv.width, y * CELL + .5); ctx.stroke(); }
+    if (!board) return;
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (board[y][x]) cell(ctx, x, y, COLORS[board[y][x]]);
+    if (cur && state !== 'over') {
+      let gy = cur.y; while (!collide(cur.m, cur.x, gy + 1)) gy++;
+      cur.m.forEach((row, r) => row.forEach((v, c) => { if (v && gy + r >= 0) cell(ctx, cur.x + c, gy + r, COLORS[cur.t], true); }));
+      cur.m.forEach((row, r) => row.forEach((v, c) => { if (v && cur.y + r >= 0) cell(ctx, cur.x + c, cur.y + r, COLORS[cur.t]); }));
+    }
+  }
+  function drawNext() {
+    nctx.clearRect(0, 0, nv.width, nv.height);
+    if (!nextType) return;
+    const m = SHAPES[nextType], s = 16;
+    const rows = m.map((r, i) => r.some(v => v) ? i : -1).filter(i => i >= 0);
+    const cols = m[0].map((_, j) => m.some(r => r[j]) ? j : -1).filter(j => j >= 0);
+    const ox = (nv.width - cols.length * s) / 2 - cols[0] * s, oy = (nv.height - rows.length * s) / 2 - rows[0] * s;
+    m.forEach((row, r) => row.forEach((v, c) => {
+      if (!v) return;
+      nctx.fillStyle = COLORS[nextType];
+      nctx.fillRect(ox + c * s + 1, oy + r * s + 1, s - 2, s - 2);
+    }));
+  }
+
+  function loop(t) {
+    if (state !== 'play') return;
+    const dt = t - lastT; lastT = t; acc += dt;
+    if (acc >= dropMs) {
+      acc = 0;
+      if (!collide(cur.m, cur.x, cur.y + 1)) cur.y++; else lock();
+    }
+    draw();
+    if (state === 'play') requestAnimationFrame(loop);
+  }
+
+  function startGame() {
+    const nm = $('nameInput').value.trim();
+    if (!nm) { $('nameErr').textContent = '이름(또는 학번)을 입력해 주세요.'; return; }
+    playerName = nm;
+    try { localStorage.setItem('blk_name', nm); } catch (e) {}
+    $('playerName').textContent = nm;
+    board = newBoard(); bag = []; nextType = null;
+    score = 0; lines = 0; level = 1; dropMs = 800; acc = 0;
+    updateHud();
+    $('ovStart').hidden = true; $('ovOver').hidden = true; $('ovPause').hidden = true;
+    state = 'play'; startedAt = Date.now();
+    spawn();
+    lastT = performance.now();
+    requestAnimationFrame(loop);
+  }
+  function pause() {
+    if (state === 'play') { state = 'pause'; $('ovPause').hidden = false; }
+    else if (state === 'pause') { state = 'play'; $('ovPause').hidden = true; lastT = performance.now(); requestAnimationFrame(loop); }
+  }
+  function gameOver() {
+    state = 'over';
+    draw();
+    const sec = Math.round((Date.now() - startedAt) / 1000);
+    $('finalScore').textContent = score.toLocaleString() + '점';
+    $('finalDetail').textContent = `${lines}줄 · 레벨 ${level} · ${Math.floor(sec / 60)}분 ${sec % 60}초`;
+        $('ovOver').hidden = false;
+    saveResult({ name: playerName, score, lines, level, sec, t: Date.now() });
+  }
+
+  $('startBtn').onclick = startGame;
+  $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
+  $('againBtn').onclick = () => { $('ovOver').hidden = true; $('ovStart').hidden = false; $('nameInput').focus(); };
+  $('resumeBtn').onclick = pause;
+  $('pauseBtn').onclick = () => { if (state === 'play' || state === 'pause') pause(); };
+
+  function act(a) {
+    if (state !== 'play') return;
+    if (a === 'left') move(-1);
+    else if (a === 'right') move(1);
+    else if (a === 'rotate') tryRotate();
+    else if (a === 'down') softDrop();
+    else if (a === 'drop') hardDrop();
+    draw();
+  }
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'rotate', ArrowDown: 'down', ' ': 'drop' };
+    if (e.key === 'p' || e.key === 'P') { if (state === 'play' || state === 'pause') pause(); return; }
+    if (map[e.key] && state === 'play') { e.preventDefault(); act(map[e.key]); }
+  });
+  document.querySelectorAll('.controls button').forEach(b => {
+    let t1 = null, t2 = null;
+    const a = b.dataset.act, repeat = a === 'left' || a === 'right' || a === 'down';
+    const stop = () => { clearTimeout(t1); clearInterval(t2); t1 = t2 = null; };
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault(); act(a);
+      if (repeat) t1 = setTimeout(() => { t2 = setInterval(() => act(a), 60); }, 180);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop));
+  });
+
+  // ---------- 결과 전송 (config.js의 SHEET_URL → 구글 시트) ----------
+  function saveResult(r) {
+    const area = $('saveArea');
+    area.innerHTML = '';
+    const msg = document.createElement('p');
+    area.append(msg);
+    const url = (window.SHEET_URL || '').trim();
+    if (!url) { msg.textContent = '점수를 선생님께 알려 주세요.'; return; }
+    msg.textContent = '결과 전송 중…';
+    fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(r)
+    }).then(() => {
+      msg.className = 'saved';
+      msg.textContent = '✅ 결과가 선생님께 전송됐어요';
+    }).catch(() => {
+      msg.textContent = '⚠️ 전송에 실패했어요. 인터넷 연결을 확인하고, 점수를 선생님께 알려 주세요.';
+    });
+  }
+
+  sizeCanvas();
+})();
+</script>
+</body>
+</html>

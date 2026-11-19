@@ -1,1 +1,1 @@
-window.SHEET_URL = 'https://script.google.com/macros/library/d/1ZC8CmKxZGXl-053F1cKCCL284bo36SaBCkHvgdTYhjvMGaf0DjpQurjo/3';
+window.SHEET_URL = 'https://script.google.com/macros/s/AKfycbwOdFVrj4jaN49KyTatWf1yeVZZbKJApomqZiffE5qMcKm7AES2JOroHrGOgu4EYnsx/exec';
